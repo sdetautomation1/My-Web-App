@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iO Minimalist Notebook</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- PDF.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+    <style>
+        /* Custom scrollbar for a cleaner look */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background-color: rgba(161, 161, 170, 0.3);
+            border-radius: 10px;
+        }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+            background-color: rgba(82, 82, 91, 0.5);
+        }
+    </style>
+</head>
+<body class="flex flex-col h-screen font-sans transition-colors duration-300 bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100 overflow-hidden">
+
+    <!-- Top Navigation Bar - Minimalist Header -->
+    <header class="flex-none h-16 border-b border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-950/50 backdrop-blur-xl z-20 flex items-center justify-between px-6 transition-colors duration-300">
+        <div class="flex items-center gap-4">
+            <button id="toggle-sidebar-btn" class="p-2 -ml-2 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors">
+                <i data-lucide="panel-left-close" id="sidebar-icon"></i>
+            </button>
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-full bg-black dark:bg-white flex items-center justify-center">
+                    <span class="text-white dark:text-black font-bold text-sm">iO</span>
+                </div>
+                <h1 class="font-semibold text-lg tracking-tight hidden sm:block">Notebook</h1>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-6">
+            <!-- API Key Input Section -->
+            <div class="flex items-center bg-zinc-100 dark:bg-zinc-900 rounded-full px-3 py-1.5 border border-zinc-200 dark:border-zinc-800 transition-all focus-within:ring-2 ring-zinc-400 dark:ring-zinc-600">
+                <i data-lucide="key" class="w-3.5 h-3.5 text-zinc-500 mr-2"></i>
+                <input
+                    type="password"
+                    id="api-key-input"
+                    placeholder="Gemini API Key..."
+                    class="bg-transparent border-none outline-none text-sm w-32 sm:w-48 placeholder-zinc-400 text-zinc-800 dark:text-zinc-200"
+                />
+                <!-- Status Indicator -->
+                <div id="api-status-container" class="ml-2 flex items-center justify-center w-5 h-5">
+                    <div class="w-2 h-2 rounded-full bg-zinc-300 dark:bg-zinc-700" id="api-status-idle"></div>
+                </div>
+            </div>
+
+            <!-- Theme Toggle -->
+            <button id="theme-toggle-btn" class="p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors" aria-label="Toggle dark mode">
+                <i data-lucide="sun" id="theme-icon"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 flex overflow-hidden relative">
+        
+        <!-- Left Sidebar - Document Management -->
+        <aside id="left-sidebar" class="flex-none w-72 flex flex-col border-r border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/30 transition-all duration-300 translate-x-0 ml-0">
+            <div class="p-4">
+                <input type="file" id="file-upload" multiple accept="application/pdf" class="hidden" />
+                <button id="upload-btn" class="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-zinc-50 dark:text-zinc-900 font-medium rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm">
+                    <i data-lucide="upload" class="w-[18px] h-[18px]" id="upload-icon"></i>
+                    <span id="upload-text">Upload PDFs</span>
+                </button>
+            </div>
+
+            <div class="flex-1 overflow-y-auto px-3 pb-4 space-y-1 custom-scrollbar">
+                <h2 class="text-xs font-semibold text-zinc-500 uppercase tracking-wider px-2 py-3">Documents</h2>
+                <div id="document-list" class="flex flex-col gap-1">
+                    <!-- Empty State -->
+                    <div id="empty-docs-state" class="px-2 py-6 text-center text-zinc-400 text-sm flex flex-col items-center gap-2">
+                        <i data-lucide="file-search" class="w-6 h-6 opacity-50"></i>
+                        <p>No documents uploaded</p>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Center Canvas - PDF Viewer -->
+        <section class="flex-1 flex flex-col min-w-0 bg-zinc-200/30 dark:bg-black/20">
+            
+            <!-- Empty Viewer State -->
+            <div id="pdf-empty-state" class="flex-1 flex flex-col items-center justify-center text-zinc-400 gap-4">
+                <div class="w-20 h-20 rounded-3xl bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center shadow-sm">
+                    <i data-lucide="file-text" class="w-8 h-8 opacity-50"></i>
+                </div>
+                <p class="text-sm font-medium">Select a document to view</p>
+            </div>
+
+            <!-- Active PDF Viewer -->
+            <div id="pdf-viewer-container" class="hidden flex-1 w-full h-full flex flex-col overflow-hidden">
+                <!-- Custom Toolbar for PDF -->
+                <div class="flex-none h-12 border-b border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-950/50 backdrop-blur-md flex items-center justify-between px-4">
+                    <div class="flex items-center gap-2">
+                        <span id="pdf-title" class="text-sm font-medium truncate max-w-[200px] sm:max-w-xs">Document Name</span>
+                    </div>
+                    
+                    <div id="pdf-pagination" class="hidden flex items-center gap-3 bg-zinc-100 dark:bg-zinc-900 px-3 py-1 rounded-lg border border-zinc-200 dark:border-zinc-800">
+                        <button id="btn-prev-page" class="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 disabled:opacity-50 transition-colors">&larr;</button>
+                        <span id="page-indicator" class="text-xs font-medium text-zinc-600 dark:text-zinc-400">Page 1 of 1</span>
+                        <button id="btn-next-page" class="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 disabled:opacity-50 transition-colors">&rarr;</button>
+                    </div>
+                    
+                    <div class="flex items-center gap-2">
+                        <button id="btn-zoom-out" class="px-2 py-1 text-xs font-medium text-zinc-600 dark:text-zinc-400 bg-zinc-200/50 dark:bg-zinc-800/50 rounded hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors">-</button>
+                        <span id="zoom-indicator" class="text-xs w-10 text-center font-medium text-zinc-600 dark:text-zinc-400">120%</span>
+                        <button id="btn-zoom-in" class="px-2 py-1 text-xs font-medium text-zinc-600 dark:text-zinc-400 bg-zinc-200/50 dark:bg-zinc-800/50 rounded hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors">+</button>
+                    </div>
+                </div>
+                
+                <!-- PDF Canvas Container -->
+                <div class="flex-1 overflow-auto flex justify-center p-4 sm:p-6 lg:p-8 relative custom-scrollbar">
+                    <div class="relative shadow-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 transition-all duration-300">
+                        <div id="pdf-loader" class="hidden absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-zinc-950/50 backdrop-blur-sm z-10 transition-opacity">
+                            <i data-lucide="loader-2" class="w-6 h-6 animate-spin text-zinc-500"></i>
+                        </div>
+                        <canvas id="pdf-canvas" class="max-w-full h-auto block"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Right Sidebar - AI Chatbot -->
+        <aside class="flex-none w-[340px] lg:w-[400px] flex flex-col border-l border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-[-10px_0_30px_rgba(0,0,0,0.02)]">
+            <!-- Chat Header -->
+            <div class="flex-none p-4 border-b border-zinc-100 dark:border-zinc-900 flex items-center gap-3">
+                <div class="w-8 h-8 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
+                    <i data-lucide="message-square" class="w-4 h-4 text-blue-500"></i>
+                </div>
+                <div>
+                    <h3 class="font-semibold text-sm">Document Intelligence</h3>
+                    <p class="text-xs text-zinc-500">Gemini 2.5 Flash</p>
+                </div>
+            </div>
+
+            <!-- AI Quick Actions -->
+            <div id="quick-actions" class="flex-none px-4 py-3 border-b border-zinc-100 dark:border-zinc-900 flex gap-2 overflow-x-auto custom-scrollbar opacity-50 pointer-events-none transition-opacity">
+                <button id="action-summarize" class="flex-none whitespace-nowrap px-3 py-1.5 text-xs font-medium rounded-full bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors border border-blue-200 dark:border-blue-800/50">✨ Summarize</button>
+                <button id="action-explain" class="flex-none whitespace-nowrap px-3 py-1.5 text-xs font-medium rounded-full bg-purple-50 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors border border-purple-200 dark:border-purple-800/50">✨ Explain Page</button>
+                <button id="action-quiz" class="flex-none whitespace-nowrap px-3 py-1.5 text-xs font-medium rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors border border-emerald-200 dark:border-emerald-800/50">✨ Quiz Me</button>
+            </div>
+
+            <!-- Chat Messages -->
+            <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-6 scroll-smooth custom-scrollbar">
+                <!-- Empty Chat State -->
+                <div id="chat-empty-state" class="h-full flex flex-col items-center justify-center text-center px-4 gap-3 opacity-60">
+                    <div class="w-12 h-12 rounded-full border border-zinc-200 dark:border-zinc-800 flex items-center justify-center">
+                        <span class="text-xl">✨</span>
+                    </div>
+                    <p class="text-sm text-zinc-600 dark:text-zinc-400">
+                        Ask me anything about the uploaded documents. I will provide answers with page references.
+                    </p>
+                </div>
+                <!-- Messages will be injected here -->
+            </div>
+            
+            <!-- Chat Loading Indicator -->
+            <div id="chat-loading" class="hidden flex items-center gap-2 text-zinc-500 px-4 py-2 bg-white dark:bg-zinc-950">
+                <i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i>
+                <span class="text-xs font-medium">Analyzing document...</span>
+            </div>
+
+            <!-- Chat Input -->
+            <div class="flex-none p-4 bg-white dark:bg-zinc-950 border-t border-zinc-100 dark:border-zinc-900">
+                <form id="chat-form" class="relative flex items-center">
+                    <textarea
+                        id="chat-input"
+                        placeholder="Enter API Key first..."
+                        disabled
+                        class="w-full bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl pl-4 pr-12 py-3 text-sm resize-none h-[52px] max-h-[120px] focus:outline-none focus:ring-2 ring-zinc-300 dark:ring-zinc-700 transition-all disabled:opacity-50 placeholder-zinc-500 custom-scrollbar"
+                        rows="1"
+                    ></textarea>
+                    <button
+                        type="submit"
+                        id="chat-submit"
+                        disabled
+                        class="absolute right-2 w-8 h-8 flex items-center justify-center rounded-xl bg-black dark:bg-white text-white dark:text-black hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed shadow-sm"
+                    >
+                        <i data-lucide="send" class="w-3.5 h-3.5" id="send-icon"></i>
+                    </button>
+                </form>
+            </div>
+        </aside>
+
+    </main>
+
+    <script>
+        // --- State Management ---
+        let state = {
+            apiKey: '',
+            apiStatus: 'idle', // idle, connected, error
+            isDarkMode: true,
+            documents: [], // { id, name, file, textContent, parsedPages }
+            activeDocId: null,
+            chatMessages: [],
+            isChatLoading: false,
+            sidebarOpen: true,
+            
+            // PDF Viewer State
+            currentPage: 1,
+            totalPages: 0,
+            activePdfDoc: null,
+            isRendering: false,
+            pdfScale: 1.2
+        };
+
+        // --- DOM Elements ---
+        const els = {
+            html: document.documentElement,
+            themeToggleBtn: document.getElementById('theme-toggle-btn'),
+            themeIcon: document.getElementById('theme-icon'),
+            apiKeyInput: document.getElementById('api-key-input'),
+            apiStatusContainer: document.getElementById('api-status-container'),
+            sidebarToggleBtn: document.getElementById('toggle-sidebar-btn'),
+            sidebarIcon: document.getElementById('sidebar-icon'),
+            leftSidebar: document.getElementById('left-sidebar'),
+            
+            fileInput: document.getElementById('file-upload'),
+            uploadBtn: document.getElementById('upload-btn'),
+            uploadIcon: document.getElementById('upload-icon'),
+            uploadText: document.getElementById('upload-text'),
+            
+            documentList: document.getElementById('document-list'),
+            emptyDocsState: document.getElementById('empty-docs-state'),
+            
+            pdfEmptyState: document.getElementById('pdf-empty-state'),
+            pdfViewerContainer: document.getElementById('pdf-viewer-container'),
+            pdfTitle: document.getElementById('pdf-title'),
+            pdfPagination: document.getElementById('pdf-pagination'),
+            btnPrevPage: document.getElementById('btn-prev-page'),
+            btnNextPage: document.getElementById('btn-next-page'),
+            pageIndicator: document.getElementById('page-indicator'),
+            btnZoomOut: document.getElementById('btn-zoom-out'),
+            btnZoomIn: document.getElementById('btn-zoom-in'),
+            zoomIndicator: document.getElementById('zoom-indicator'),
+            pdfCanvas: document.getElementById('pdf-canvas'),
+            pdfLoader: document.getElementById('pdf-loader'),
+            
+            chatMessages: document.getElementById('chat-messages'),
+            chatEmptyState: document.getElementById('chat-empty-state'),
+            chatLoading: document.getElementById('chat-loading'),
+            chatForm: document.getElementById('chat-form'),
+            chatInput: document.getElementById('chat-input'),
+            chatSubmit: document.getElementById('chat-submit'),
+            
+            quickActions: document.getElementById('quick-actions'),
+            btnActionSummarize: document.getElementById('action-summarize'),
+            btnActionExplain: document.getElementById('action-explain'),
+            btnActionQuiz: document.getElementById('action-quiz'),
+        };
+
+        // --- Initialization ---
+        window.onload = () => {
+            // Setup PDF.js Worker
+            window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+            
+            lucide.createIcons();
+            setupEventListeners();
+            updateThemeUI();
+        };
+
+        // --- Event Listeners ---
+        function setupEventListeners() {
+            // Theme Toggle
+            els.themeToggleBtn.addEventListener('click', () => {
+                state.isDarkMode = !state.isDarkMode;
+                updateThemeUI();
+            });
+
+            // Sidebar Toggle
+            els.sidebarToggleBtn.addEventListener('click', () => {
+                state.sidebarOpen = !state.sidebarOpen;
+                if (state.sidebarOpen) {
+                    els.leftSidebar.classList.remove('-translate-x-full', '-ml-72');
+                    els.leftSidebar.classList.add('translate-x-0', 'ml-0');
+                    els.sidebarIcon.setAttribute('data-lucide', 'panel-left-close');
+                } else {
+                    els.leftSidebar.classList.add('-translate-x-full', '-ml-72');
+                    els.leftSidebar.classList.remove('translate-x-0', 'ml-0');
+                    els.sidebarIcon.setAttribute('data-lucide', 'panel-left-open');
+                }
+                lucide.createIcons();
+            });
+
+            // API Key Input
+            els.apiKeyInput.addEventListener('input', (e) => {
+                state.apiKey = e.target.value;
+                if (state.apiKey.trim().length > 10) {
+                    setApiStatus('connected');
+                } else if (state.apiKey.trim().length > 0) {
+                    setApiStatus('error');
+                } else {
+                    setApiStatus('idle');
+                }
+                updateChatInputState();
+            });
+
+            // File Upload
+            els.uploadBtn.addEventListener('click', () => els.fileInput.click());
+            els.fileInput.addEventListener('change', handleFileUpload);
+
+            // PDF Toolbar
+            els.btnPrevPage.addEventListener('click', () => {
+                if (state.currentPage > 1 && !state.isRendering) {
+                    state.currentPage--;
+                    renderPdfPage();
+                }
+            });
+            els.btnNextPage.addEventListener('click', () => {
+                if (state.currentPage < state.totalPages && !state.isRendering) {
+                    state.currentPage++;
+                    renderPdfPage();
+                }
+            });
+            els.btnZoomOut.addEventListener('click', () => {
+                state.pdfScale = Math.max(0.5, state.pdfScale - 0.2);
+                updateZoomUI();
+                renderPdfPage();
+            });
+            els.btnZoomIn.addEventListener('click', () => {
+                state.pdfScale = Math.min(3.0, state.pdfScale + 0.2);
+                updateZoomUI();
+                renderPdfPage();
+            });
+
+            // Chat Input
+            els.chatInput.addEventListener('input', (e) => {
+                els.chatSubmit.disabled = !e.target.value.trim() || !state.apiKey || state.isChatLoading;
+            });
+            els.chatInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    if (!els.chatSubmit.disabled) handleSendMessage();
+                }
+            });
+            els.chatForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                handleSendMessage();
+            });
+
+            // Quick Actions
+            els.btnActionSummarize.addEventListener('click', () => triggerQuickAction('summarize'));
+            els.btnActionExplain.addEventListener('click', () => triggerQuickAction('explain_page'));
+            els.btnActionQuiz.addEventListener('click', () => triggerQuickAction('quiz'));
+        }
+
+        // --- UI Updaters ---
+        function updateThemeUI() {
+            if (state.isDarkMode) {
+                els.html.classList.add('dark');
+                els.themeIcon.setAttribute('data-lucide', 'sun');
+            } else {
+                els.html.classList.remove('dark');
+                els.themeIcon.setAttribute('data-lucide', 'moon');
+            }
+            lucide.createIcons();
+        }
+
+        function setApiStatus(status) {
+            state.apiStatus = status;
+            let html = '';
+            if (status === 'connected') {
+                html = `
+                    <div class="relative flex items-center justify-center">
+                        <span class="animate-ping absolute inline-flex h-3 w-3 rounded-full bg-green-400 opacity-75"></span>
+                        <i data-lucide="check-circle-2" class="w-4 h-4 text-green-500 relative z-10 drop-shadow-[0_0_8px_rgba(34,197,94,0.8)]"></i>
+                    </div>`;
+            } else if (status === 'error') {
+                html = `<i data-lucide="alert-circle" class="w-4 h-4 text-red-500"></i>`;
+            } else {
+                html = `<div class="w-2 h-2 rounded-full bg-zinc-300 dark:bg-zinc-700"></div>`;
+            }
+            els.apiStatusContainer.innerHTML = html;
+            lucide.createIcons();
+            updateChatInputState();
+        }
+
+        function updateChatInputState() {
+            const isReady = state.apiKey.trim().length > 0 && state.apiStatus !== 'error' && !state.isChatLoading;
+            els.chatInput.disabled = !isReady;
+            els.chatInput.placeholder = !state.apiKey ? "Enter API Key first..." : "Ask about the document...";
+            els.chatSubmit.disabled = !isReady || !els.chatInput.value.trim();
+            
+            // Enable Quick Actions only if API is ready AND a document is selected
+            const canUseActions = isReady && state.activeDocId !== null;
+            if (canUseActions) {
+                els.quickActions.classList.remove('opacity-50', 'pointer-events-none');
+            } else {
+                els.quickActions.classList.add('opacity-50', 'pointer-events-none');
+            }
+        }
+
+        function setUploadLoading(isLoading) {
+            if (isLoading) {
+                els.uploadBtn.disabled = true;
+                els.uploadIcon.setAttribute('data-lucide', 'loader-2');
+                els.uploadIcon.classList.add('animate-spin');
+                els.uploadText.textContent = "Parsing PDF...";
+            } else {
+                els.uploadBtn.disabled = false;
+                els.uploadIcon.setAttribute('data-lucide', 'upload');
+                els.uploadIcon.classList.remove('animate-spin');
+                els.uploadText.textContent = "Upload PDFs";
+            }
+            lucide.createIcons();
+        }
+
+        // --- Document Management ---
+        async function handleFileUpload(event) {
+            const files = Array.from(event.target.files);
+            if (!files.length) return;
+
+            setUploadLoading(true);
+
+            for (const file of files) {
+                if (file.type !== 'application/pdf') {
+                    alert("Please upload PDF files only for optimal text extraction.");
+                    continue;
+                }
+
+                const newDoc = {
+                    id: crypto.randomUUID(),
+                    name: file.name,
+                    file: file,
+                    textContent: '',
+                    parsedPages: []
+                };
+
+                try {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const { fullText, parsedPages } = await extractTextFromPdf(arrayBuffer);
+                    newDoc.textContent = fullText;
+                    newDoc.parsedPages = parsedPages;
+                } catch (error) {
+                    console.error("Error extracting text:", error);
+                    newDoc.textContent = "Error extracting text from this PDF. AI may not be able to read it.";
+                }
+
+                state.documents.push(newDoc);
+                if (!state.activeDocId) {
+                    setActiveDocument(newDoc.id);
+                }
+            }
+            
+            els.fileInput.value = '';
+            renderDocumentList();
+            setUploadLoading(false);
+        }
+
+        async function extractTextFromPdf(fileBuffer) {
+            const pdf = await window.pdfjsLib.getDocument(fileBuffer).promise;
+            let fullText = "";
+            let parsedPages = [];
+
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                const pageText = textContent.items.map(item => item.str).join(" ");
+                fullText += `\n\n--- PAGE ${i} ---\n${pageText}`;
+                parsedPages.push({ pageNumber: i, text: pageText });
+            }
+            return { fullText, parsedPages };
+        }
+
+        function renderDocumentList() {
+            if (state.documents.length === 0) {
+                els.emptyDocsState.classList.remove('hidden');
+                els.documentList.innerHTML = '';
+                els.documentList.appendChild(els.emptyDocsState);
+                return;
+            }
+
+            els.emptyDocsState.classList.add('hidden');
+            let html = '';
+            
+            state.documents.forEach(doc => {
+                const isActive = state.activeDocId === doc.id;
+                const activeClasses = isActive 
+                    ? 'bg-zinc-200/60 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-medium' 
+                    : 'hover:bg-zinc-200/40 dark:hover:bg-zinc-800/50 text-zinc-600 dark:text-zinc-400';
+                const iconColor = isActive ? 'text-blue-500' : 'text-zinc-400';
+
+                html += `
+                    <div onclick="setActiveDocument('${doc.id}')" class="group flex items-center justify-between p-2.5 rounded-lg cursor-pointer transition-colors ${activeClasses}">
+                        <div class="flex items-center gap-3 overflow-hidden">
+                            <i data-lucide="file-text" class="w-4 h-4 flex-shrink-0 ${iconColor}"></i>
+                            <span class="truncate text-sm">${doc.name}</span>
+                        </div>
+                        <button onclick="removeDocument(event, '${doc.id}')" class="opacity-0 group-hover:opacity-100 p-1.5 rounded-md hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-400 transition-all text-zinc-400">
+                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                        </button>
+                    </div>
+                `;
+            });
+
+            els.documentList.innerHTML = html;
+            lucide.createIcons();
+        }
+
+        window.setActiveDocument = async function(id) {
+            state.activeDocId = id;
+            renderDocumentList();
+            updateChatInputState();
+            
+            const activeDoc = state.documents.find(d => d.id === id);
+            
+            if (activeDoc) {
+                els.pdfEmptyState.classList.add('hidden');
+                els.pdfViewerContainer.classList.remove('hidden');
+                els.pdfTitle.textContent = activeDoc.name;
+                
+                try {
+                    const arrayBuffer = await activeDoc.file.arrayBuffer();
+                    const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                    state.activePdfDoc = pdf;
+                    state.totalPages = pdf.numPages;
+                    state.currentPage = 1;
+                    
+                    updatePaginationUI();
+                    updateZoomUI();
+                    renderPdfPage();
+                } catch (error) {
+                    console.error("Error loading PDF for rendering:", error);
+                    state.activePdfDoc = null;
+                }
+            } else {
+                els.pdfEmptyState.classList.remove('hidden');
+                els.pdfViewerContainer.classList.add('hidden');
+            }
+        }
+
+        window.removeDocument = function(event, id) {
+            event.stopPropagation();
+            state.documents = state.documents.filter(doc => doc.id !== id);
+            if (state.activeDocId === id) {
+                setActiveDocument(null);
+            } else {
+                renderDocumentList();
+            }
+        }
+
+        // --- PDF Rendering ---
+        async function renderPdfPage() {
+            if (!state.activePdfDoc) return;
+            
+            state.isRendering = true;
+            els.pdfLoader.classList.remove('hidden');
+            updatePaginationUI();
+
+            try {
+                const page = await state.activePdfDoc.getPage(state.currentPage);
+                const viewport = page.getViewport({ scale: state.pdfScale });
+                const canvas = els.pdfCanvas;
+                const context = canvas.getContext('2d');
+                
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+                
+                const renderContext = {
+                    canvasContext: context,
+                    viewport: viewport
+                };
+                await page.render(renderContext).promise;
+            } catch (error) {
+                console.error("Error rendering page:", error);
+            } finally {
+                state.isRendering = false;
+                els.pdfLoader.classList.add('hidden');
+                updatePaginationUI();
+            }
+        }
+
+        function updatePaginationUI() {
+            if (state.totalPages > 0) {
+                els.pdfPagination.classList.remove('hidden');
+                els.pageIndicator.textContent = `Page ${state.currentPage} of ${state.totalPages}`;
+                els.btnPrevPage.disabled = state.currentPage <= 1 || state.isRendering;
+                els.btnNextPage.disabled = state.currentPage >= state.totalPages || state.isRendering;
+            } else {
+                els.pdfPagination.classList.add('hidden');
+            }
+        }
+
+        function updateZoomUI() {
+            els.zoomIndicator.textContent = `${Math.round(state.pdfScale * 100)}%`;
+        }
+
+        // --- Chat & Gemini API ---
+        async function handleSendMessage() {
+            const userQuery = els.chatInput.value.trim();
+            if (!userQuery || !state.apiKey || state.apiStatus === 'error') return;
+
+            // Clear input and show user message
+            els.chatInput.value = '';
+            els.chatInput.style.height = '52px';
+            updateChatInputState();
+            
+            state.chatMessages.push({ role: 'user', content: userQuery });
+            renderChatMessages();
+
+            state.isChatLoading = true;
+            updateChatInputState();
+            els.chatLoading.classList.remove('hidden');
+
+            const activeDoc = state.documents.find(d => d.id === state.activeDocId);
+            let contextString = "You are a helpful AI assistant in a minimal notebook app.";
+            
+            if (activeDoc) {
+                contextString += `\n\nYou are answering questions based on the following document: "${activeDoc.name}".\n`;
+                contextString += `Whenever you answer, you MUST provide explicit references or quotes from the text, and indicate the PAGE NUMBER where you found the information.\n\n`;
+                contextString += `=== DOCUMENT CONTENT BEGIN ===\n${activeDoc.textContent}\n=== DOCUMENT CONTENT END ===\n\n`;
+                contextString += `If the answer cannot be found in the document, state that clearly and then provide a general answer if appropriate, but specify it is not from the text.`;
+            } else {
+                contextString += "\n\nThe user has not selected any document. Prompt them to upload and select a PDF if they want specific document analysis.";
+            }
+
+            try {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${state.apiKey}`;
+                const payload = {
+                    contents: [{ parts: [{ text: userQuery }] }],
+                    systemInstruction: { parts: [{ text: contextString }] },
+                };
+
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API Error: ${response.status}`);
+                }
+
+                const data = await response.json();
+                const aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || "Sorry, I couldn't generate a response.";
+                
+                state.chatMessages.push({ role: 'assistant', content: aiText });
+                setApiStatus('connected');
+
+            } catch (error) {
+                console.error("Gemini API Error:", error);
+                state.chatMessages.push({ 
+                    role: 'assistant', 
+                    content: `**Error:** Could not connect to Gemini API. Please check your API key. Details: ${error.message}` 
+                });
+                setApiStatus('error');
+            } finally {
+                state.isChatLoading = false;
+                els.chatLoading.classList.add('hidden');
+                updateChatInputState();
+                renderChatMessages();
+            }
+        }
+
+        async function triggerQuickAction(action) {
+            const activeDoc = state.documents.find(d => d.id === state.activeDocId);
+            if (!activeDoc || !state.apiKey || state.apiStatus === 'error' || state.isChatLoading) return;
+
+            let userQuery = "";
+            let contextModifier = "";
+
+            if (action === 'summarize') {
+                userQuery = "✨ Please summarize this document in a few concise bullet points.";
+            } else if (action === 'explain_page') {
+                userQuery = `✨ Please explain the contents of Page ${state.currentPage} in simple terms.`;
+                const pageData = activeDoc.parsedPages.find(p => p.pageNumber === state.currentPage);
+                if (pageData) {
+                   contextModifier = `\n\nThe user specifically wants an explanation of PAGE ${state.currentPage}. Here is the exact text of that page:\n\n${pageData.text}\n\nFocus ONLY on this page. Ignore the rest of the document.`;
+                } else {
+                   contextModifier = `\n\nThe user wants an explanation of PAGE ${state.currentPage}, but the text could not be isolated. Explain the general current context.`;
+                }
+            } else if (action === 'quiz') {
+                userQuery = "✨ Generate a 3-question multiple-choice quiz based on this document to test my understanding. Provide the answers at the very end.";
+            }
+
+            state.chatMessages.push({ role: 'user', content: userQuery });
+            renderChatMessages();
+
+            state.isChatLoading = true;
+            updateChatInputState();
+            els.chatLoading.classList.remove('hidden');
+
+            let contextString = `You are a helpful AI assistant in a minimal notebook app. \n\nYou are answering questions based on the following document: "${activeDoc.name}".\n=== DOCUMENT CONTENT BEGIN ===\n${activeDoc.textContent}\n=== DOCUMENT CONTENT END ===\n`;
+            if (contextModifier) contextString += contextModifier;
+
+            try {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${state.apiKey}`;
+                const payload = {
+                    contents: [{ parts: [{ text: userQuery }] }],
+                    systemInstruction: { parts: [{ text: contextString }] },
+                };
+
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) throw new Error(`API Error: ${response.status}`);
+                const data = await response.json();
+                const aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || "Sorry, I couldn't generate a response.";
+                
+                state.chatMessages.push({ role: 'assistant', content: aiText });
+                setApiStatus('connected');
+            } catch (error) {
+                console.error("Gemini Action Error:", error);
+                state.chatMessages.push({ role: 'assistant', content: `**Error:** Could not connect to Gemini API. Details: ${error.message}` });
+                setApiStatus('error');
+            } finally {
+                state.isChatLoading = false;
+                els.chatLoading.classList.add('hidden');
+                updateChatInputState();
+                renderChatMessages();
+            }
+        }
+
+        function renderChatMessages() {
+            if (state.chatMessages.length === 0) {
+                els.chatEmptyState.classList.remove('hidden');
+                els.chatMessages.innerHTML = '';
+                els.chatMessages.appendChild(els.chatEmptyState);
+                return;
+            }
+
+            els.chatEmptyState.classList.add('hidden');
+            let html = '';
+
+            state.chatMessages.forEach(msg => {
+                const isUser = msg.role === 'user';
+                const wrapperClasses = isUser ? 'ml-auto items-end' : 'mr-auto items-start';
+                const bubbleClasses = isUser 
+                    ? 'bg-black text-white dark:bg-white dark:text-black rounded-br-sm' 
+                    : 'bg-zinc-100 text-zinc-900 dark:bg-zinc-900 dark:text-zinc-100 rounded-bl-sm border border-zinc-200 dark:border-zinc-800';
+                
+                // Simple markdown-like bold parsing
+                const formattedContent = msg.content.split('**').map((part, i) => i % 2 === 1 ? `<strong>${part}</strong>` : part).join('');
+
+                html += `
+                    <div class="flex flex-col max-w-[90%] ${wrapperClasses}">
+                        <div class="px-4 py-3 rounded-2xl text-sm leading-relaxed ${bubbleClasses}">
+                            ${formattedContent.replace(/\n/g, '<br/>')}
+                        </div>
+                        <span class="text-[10px] text-zinc-400 mt-1 px-1">
+                            ${isUser ? 'You' : 'Gemini'}
+                        </span>
+                    </div>
+                `;
+            });
+
+            els.chatMessages.innerHTML = html;
+            els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
+        }
+
+    </script>
+</body>
+</html>
