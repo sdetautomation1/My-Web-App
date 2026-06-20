@@ -27,6 +27,9 @@
     <!-- Mermaid.js for Knowledge Graphs -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/9.4.3/mermaid.min.js"></script>
 
+    <!-- Marked.js for beautiful Markdown parsing in chat -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
     <style>
         /* Custom scrollbar for a cleaner look */
         .custom-scrollbar::-webkit-scrollbar {
@@ -42,6 +45,37 @@
         }
         .dark .custom-scrollbar::-webkit-scrollbar-thumb {
             background-color: rgba(82, 82, 91, 0.5);
+        }
+        
+        /* Hide scrollbar for horizontal scrolling menus */
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        
+        /* Markdown Chat Bubble Styles */
+        .chat-bubble {
+            word-break: break-word;
+        }
+        .chat-bubble p { margin-bottom: 0.75em; }
+        .chat-bubble p:last-child { margin-bottom: 0; }
+        .chat-bubble ul { list-style-type: disc; padding-left: 1.5em; margin-bottom: 0.75em; }
+        .chat-bubble ol { list-style-type: decimal; padding-left: 1.5em; margin-bottom: 0.75em; }
+        .chat-bubble li { margin-bottom: 0.25em; }
+        .chat-bubble h1, .chat-bubble h2, .chat-bubble h3 { font-weight: 600; margin-top: 1em; margin-bottom: 0.5em; line-height: 1.3; }
+        .chat-bubble code { background-color: rgba(161, 161, 170, 0.2); padding: 0.1em 0.3em; border-radius: 0.25em; font-size: 0.9em; }
+        .chat-bubble pre { background-color: rgba(0, 0, 0, 0.05); padding: 0.75em; border-radius: 0.5em; overflow-x: auto; margin-bottom: 0.75em; }
+        .dark .chat-bubble pre { background-color: rgba(255, 255, 255, 0.05); }
+        
+        /* Mermaid Graph Visibility */
+        .mermaid svg {
+            max-width: none !important; /* Allow the graph to be its natural size so it can scroll horizontally */
+            height: auto;
+            display: block;
+            margin: 0 auto;
         }
     </style>
 </head>
@@ -131,18 +165,18 @@
             <!-- Active PDF Viewer -->
             <div id="pdf-viewer-container" class="hidden flex-1 w-full h-full flex flex-col overflow-hidden">
                 <!-- Custom Toolbar for PDF -->
-                <div class="flex-none h-12 border-b border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-950/50 backdrop-blur-md flex items-center justify-between px-4">
-                    <div class="flex items-center gap-2">
-                        <span id="pdf-title" class="text-sm font-medium truncate max-w-[200px] sm:max-w-xs">Document Name</span>
+                <div class="flex-none min-h-[48px] py-2 border-b border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-950/50 backdrop-blur-md flex flex-wrap items-center justify-between gap-3 px-4 overflow-x-auto custom-scrollbar">
+                    <div class="flex items-center gap-2 flex-none">
+                        <span id="pdf-title" class="text-sm font-medium truncate max-w-[150px] sm:max-w-xs">Document Name</span>
                     </div>
                     
-                    <div id="pdf-pagination" class="hidden flex items-center gap-3 bg-zinc-100 dark:bg-zinc-900 px-3 py-1 rounded-lg border border-zinc-200 dark:border-zinc-800">
+                    <div id="pdf-pagination" class="hidden flex items-center gap-3 bg-zinc-100 dark:bg-zinc-900 px-3 py-1 rounded-lg border border-zinc-200 dark:border-zinc-800 flex-none">
                         <button id="btn-prev-page" class="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 disabled:opacity-50 transition-colors">&larr;</button>
-                        <span id="page-indicator" class="text-xs font-medium text-zinc-600 dark:text-zinc-400">Page 1 of 1</span>
+                        <span id="page-indicator" class="text-xs font-medium text-zinc-600 dark:text-zinc-400 whitespace-nowrap">Page 1 of 1</span>
                         <button id="btn-next-page" class="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 disabled:opacity-50 transition-colors">&rarr;</button>
                     </div>
                     
-                    <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-2 flex-none ml-auto">
                         <button id="btn-zoom-out" class="px-2 py-1 text-xs font-medium text-zinc-600 dark:text-zinc-400 bg-zinc-200/50 dark:bg-zinc-800/50 rounded hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors">-</button>
                         <span id="zoom-indicator" class="text-xs w-10 text-center font-medium text-zinc-600 dark:text-zinc-400">120%</span>
                         <button id="btn-zoom-in" class="px-2 py-1 text-xs font-medium text-zinc-600 dark:text-zinc-400 bg-zinc-200/50 dark:bg-zinc-800/50 rounded hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors">+</button>
@@ -175,11 +209,14 @@
             </div>
 
             <!-- AI Quick Actions -->
-            <div id="quick-actions" class="flex-none px-4 py-3 border-b border-zinc-100 dark:border-zinc-900 flex gap-2 overflow-x-auto custom-scrollbar opacity-50 pointer-events-none transition-opacity">
+            <div id="quick-actions" class="flex-none px-4 py-3 border-b border-zinc-100 dark:border-zinc-900 flex flex-wrap gap-2 opacity-50 pointer-events-none transition-opacity max-w-full min-w-0">
                 <button id="action-summarize" class="flex-none whitespace-nowrap px-3 py-1.5 text-xs font-medium rounded-full bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors border border-blue-200 dark:border-blue-800/50">✨ Summarize</button>
                 <button id="action-explain" class="flex-none whitespace-nowrap px-3 py-1.5 text-xs font-medium rounded-full bg-purple-50 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors border border-purple-200 dark:border-purple-800/50">✨ Explain Page</button>
                 <button id="action-quiz" class="flex-none whitespace-nowrap px-3 py-1.5 text-xs font-medium rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors border border-emerald-200 dark:border-emerald-800/50">✨ Quiz Me</button>
                 <button id="action-graph" class="flex-none whitespace-nowrap px-3 py-1.5 text-xs font-medium rounded-full bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-colors border border-amber-200 dark:border-amber-800/50">✨ Knowledge Graph</button>
+                <button id="action-action-items" class="flex-none whitespace-nowrap px-3 py-1.5 text-xs font-medium rounded-full bg-teal-50 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400 hover:bg-teal-100 dark:hover:bg-teal-900/50 transition-colors border border-teal-200 dark:border-teal-800/50">✨ Action Items</button>
+                <button id="action-flashcards" class="flex-none whitespace-nowrap px-3 py-1.5 text-xs font-medium rounded-full bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors border border-indigo-200 dark:border-indigo-800/50">✨ Study Flashcards</button>
+                <button id="action-critique" class="flex-none whitespace-nowrap px-3 py-1.5 text-xs font-medium rounded-full bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/50 transition-colors border border-rose-200 dark:border-rose-800/50">✨ Critique</button>
             </div>
 
             <!-- Chat Messages -->
@@ -295,7 +332,19 @@
             btnActionExplain: document.getElementById('action-explain'),
             btnActionQuiz: document.getElementById('action-quiz'),
             btnActionGraph: document.getElementById('action-graph'),
+            btnActionItems: document.getElementById('action-action-items'),
+            btnFlashcards: document.getElementById('action-flashcards'),
+            btnCritique: document.getElementById('action-critique'),
         };
+
+        // --- Utilities ---
+        function generateId() {
+            if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+                return crypto.randomUUID();
+            }
+            // Fallback for local testing without HTTPS
+            return Date.now().toString(36) + Math.random().toString(36).substring(2);
+        }
 
         // --- Initialization ---
         window.onload = () => {
@@ -304,7 +353,17 @@
             
             // Setup Mermaid
             if (window.mermaid) {
-                mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose' });
+                mermaid.initialize({ 
+                    startOnLoad: false, 
+                    theme: 'default', 
+                    securityLevel: 'loose',
+                    flowchart: { useMaxWidth: true, htmlLabels: true }
+                });
+            }
+            
+            // Configure Marked.js
+            if (window.marked) {
+                marked.setOptions({ breaks: true, gfm: true });
             }
             
             lucide.createIcons();
@@ -408,6 +467,9 @@
             els.btnActionExplain.addEventListener('click', () => triggerQuickAction('explain_page'));
             els.btnActionQuiz.addEventListener('click', () => triggerQuickAction('quiz'));
             els.btnActionGraph.addEventListener('click', () => triggerQuickAction('graph'));
+            els.btnActionItems.addEventListener('click', () => triggerQuickAction('action_items'));
+            els.btnFlashcards.addEventListener('click', () => triggerQuickAction('flashcards'));
+            els.btnCritique.addEventListener('click', () => triggerQuickAction('critique'));
         }
 
         // --- UI Updaters ---
@@ -516,7 +578,7 @@
                 }
 
                 const newDoc = {
-                    id: crypto.randomUUID(),
+                    id: generateId(),
                     name: file.name,
                     file: file,
                     textContent: '',
@@ -774,6 +836,12 @@
             } else if (action === 'graph') {
                 userQuery = "✨ Generate a knowledge graph for this document.";
                 contextModifier = `\n\nYour task is to generate a Knowledge Graph representing the main entities and their relationships in this document. \nYou MUST output ONLY valid Mermaid.js graph syntax (e.g., \`graph TD\`). \nDo NOT include any markdown formatting, explanations, or text outside the code block. \nWrap the code in \`\`\`mermaid\n...\n\`\`\`.`;
+            } else if (action === 'action_items') {
+                userQuery = "✨ Extract all actionable tasks, next steps, and key deliverables from this document. Present them as a clear checklist.";
+            } else if (action === 'flashcards') {
+                userQuery = "✨ Generate 5 key study flashcards based on the core concepts of this document. Format them clearly with **Q:** for the question and **A:** for the answer.";
+            } else if (action === 'critique') {
+                userQuery = "✨ Play the Devil's Advocate. Critically analyze the main arguments or methodologies in this document. Point out potential flaws, biases, limitations, or strong counter-arguments.";
             }
 
             state.chatMessages.push({ role: 'user', content: userQuery });
@@ -835,24 +903,47 @@
                     ? 'bg-black text-white dark:bg-white dark:text-black rounded-br-sm' 
                     : 'bg-zinc-100 text-zinc-900 dark:bg-zinc-900 dark:text-zinc-100 rounded-bl-sm border border-zinc-200 dark:border-zinc-800 w-full overflow-hidden';
                 
-                // Parse Mermaid blocks and apply simple markdown bolding
                 let formattedContent = msg.content;
                 const hasMermaid = formattedContent.includes('```mermaid');
+                let mermaidBlocks = [];
                 
+                // 1. Extract Mermaid blocks before passing to markdown parser
                 if (hasMermaid) {
+                    let blockIndex = 0;
                     formattedContent = formattedContent.replace(/```mermaid\n?([\s\S]*?)```/g, (match, code) => {
-                        return `</p><div class="w-full overflow-x-auto bg-white dark:bg-zinc-800 p-4 rounded-xl border border-zinc-200 dark:border-zinc-700 my-2 shadow-sm"><div class="mermaid flex justify-center text-black dark:text-white">${code}</div></div><p class="mt-2">`;
+                        mermaidBlocks.push(code);
+                        const placeholder = `__MERMAID_BLOCK_${blockIndex}__`;
+                        blockIndex++;
+                        return placeholder;
                     });
-                    formattedContent = `<p>${formattedContent}</p>`;
-                } else {
-                    formattedContent = formattedContent.replace(/\n/g, '<br/>');
                 }
                 
-                formattedContent = formattedContent.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                // 2. Parse Markdown (if marked is available)
+                if (window.marked) {
+                    formattedContent = marked.parse(formattedContent);
+                } else {
+                    // Fallback if marked fails to load
+                    formattedContent = formattedContent.replace(/\n/g, '<br/>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                }
+
+                // 3. Re-inject Mermaid blocks with nice visible wrappers
+                if (hasMermaid) {
+                    mermaidBlocks.forEach((code, index) => {
+                        const graphHtml = `
+                            <div class="w-full overflow-x-auto bg-white dark:bg-zinc-800/80 p-4 rounded-xl border border-zinc-200 dark:border-zinc-700/80 my-3 shadow-sm custom-scrollbar">
+                                <div class="mermaid text-black dark:text-white min-w-max">
+                                    ${code}
+                                </div>
+                            </div>
+                        `;
+                        formattedContent = formattedContent.replace(`<p>__MERMAID_BLOCK_${index}__</p>`, graphHtml)
+                                                         .replace(`__MERMAID_BLOCK_${index}__`, graphHtml);
+                    });
+                }
 
                 html += `
-                    <div class="flex flex-col max-w-[90%] ${wrapperClasses}">
-                        <div class="px-4 py-3 rounded-2xl text-sm leading-relaxed ${bubbleClasses}">
+                    <div class="flex flex-col max-w-[90%] min-w-0 ${wrapperClasses}">
+                        <div class="px-4 py-3 rounded-2xl text-sm leading-relaxed chat-bubble ${bubbleClasses}">
                             ${formattedContent}
                         </div>
                         <span class="text-[10px] text-zinc-400 mt-1 px-1">
