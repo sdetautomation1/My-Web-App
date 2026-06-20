@@ -24,6 +24,9 @@
     <!-- PDF.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 
+    <!-- Mermaid.js for Knowledge Graphs -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/9.4.3/mermaid.min.js"></script>
+
     <style>
         /* Custom scrollbar for a cleaner look */
         .custom-scrollbar::-webkit-scrollbar {
@@ -78,14 +81,22 @@
             <button id="theme-toggle-btn" class="p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors" aria-label="Toggle dark mode">
                 <i data-lucide="sun" id="theme-icon"></i>
             </button>
+            
+            <!-- Chat Toggle for Mobile -->
+            <button id="toggle-chat-btn" class="lg:hidden p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400">
+                <i data-lucide="message-square" class="w-5 h-5"></i>
+            </button>
         </div>
     </header>
 
     <!-- Main Content Area -->
     <main class="flex-1 flex overflow-hidden relative">
         
+        <!-- Mobile Overlay -->
+        <div id="mobile-overlay" class="hidden absolute inset-0 bg-black/50 backdrop-blur-sm z-20 transition-opacity"></div>
+
         <!-- Left Sidebar - Document Management -->
-        <aside id="left-sidebar" class="flex-none w-72 flex flex-col border-r border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/30 transition-all duration-300 translate-x-0 ml-0">
+        <aside id="left-sidebar" class="absolute z-30 h-full w-[85%] sm:w-72 flex flex-col border-r border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 shadow-2xl md:shadow-none md:relative md:h-auto md:bg-zinc-50 dark:md:bg-zinc-900/30 transition-transform duration-300 -translate-x-full md:translate-x-0">
             <div class="p-4">
                 <input type="file" id="file-upload" multiple accept="application/pdf" class="hidden" />
                 <button id="upload-btn" class="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-zinc-50 dark:text-zinc-900 font-medium rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm">
@@ -151,7 +162,7 @@
         </section>
 
         <!-- Right Sidebar - AI Chatbot -->
-        <aside class="flex-none w-[340px] lg:w-[400px] flex flex-col border-l border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-[-10px_0_30px_rgba(0,0,0,0.02)]">
+        <aside id="right-sidebar" class="absolute right-0 z-30 h-full w-[85%] sm:w-[340px] lg:w-[400px] flex flex-col border-l border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-2xl lg:shadow-[-10px_0_30px_rgba(0,0,0,0.02)] lg:relative lg:h-auto transition-transform duration-300 translate-x-full lg:translate-x-0">
             <!-- Chat Header -->
             <div class="flex-none p-4 border-b border-zinc-100 dark:border-zinc-900 flex items-center gap-3">
                 <div class="w-8 h-8 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
@@ -168,6 +179,7 @@
                 <button id="action-summarize" class="flex-none whitespace-nowrap px-3 py-1.5 text-xs font-medium rounded-full bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors border border-blue-200 dark:border-blue-800/50">✨ Summarize</button>
                 <button id="action-explain" class="flex-none whitespace-nowrap px-3 py-1.5 text-xs font-medium rounded-full bg-purple-50 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors border border-purple-200 dark:border-purple-800/50">✨ Explain Page</button>
                 <button id="action-quiz" class="flex-none whitespace-nowrap px-3 py-1.5 text-xs font-medium rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors border border-emerald-200 dark:border-emerald-800/50">✨ Quiz Me</button>
+                <button id="action-graph" class="flex-none whitespace-nowrap px-3 py-1.5 text-xs font-medium rounded-full bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-colors border border-amber-200 dark:border-amber-800/50">✨ Knowledge Graph</button>
             </div>
 
             <!-- Chat Messages -->
@@ -224,7 +236,8 @@
             activeDocId: null,
             chatMessages: [],
             isChatLoading: false,
-            sidebarOpen: true,
+            sidebarOpen: window.innerWidth >= 768,
+            chatOpen: window.innerWidth >= 1024,
             
             // PDF Viewer State
             currentPage: 1,
@@ -244,6 +257,10 @@
             sidebarToggleBtn: document.getElementById('toggle-sidebar-btn'),
             sidebarIcon: document.getElementById('sidebar-icon'),
             leftSidebar: document.getElementById('left-sidebar'),
+            
+            mobileOverlay: document.getElementById('mobile-overlay'),
+            chatToggleBtn: document.getElementById('toggle-chat-btn'),
+            rightSidebar: document.getElementById('right-sidebar'),
             
             fileInput: document.getElementById('file-upload'),
             uploadBtn: document.getElementById('upload-btn'),
@@ -277,12 +294,18 @@
             btnActionSummarize: document.getElementById('action-summarize'),
             btnActionExplain: document.getElementById('action-explain'),
             btnActionQuiz: document.getElementById('action-quiz'),
+            btnActionGraph: document.getElementById('action-graph'),
         };
 
         // --- Initialization ---
         window.onload = () => {
             // Setup PDF.js Worker
             window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+            
+            // Setup Mermaid
+            if (window.mermaid) {
+                mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose' });
+            }
             
             lucide.createIcons();
             setupEventListeners();
@@ -295,21 +318,33 @@
             els.themeToggleBtn.addEventListener('click', () => {
                 state.isDarkMode = !state.isDarkMode;
                 updateThemeUI();
+                // Rerender messages to apply correct mermaid theme if needed
+                if (state.chatMessages.some(m => m.content.includes('```mermaid'))) {
+                    renderChatMessages();
+                }
+            });
+
+            // Mobile Overlay Click
+            els.mobileOverlay.addEventListener('click', () => {
+                if (window.innerWidth < 768) toggleLeftSidebar(false);
+                if (window.innerWidth < 1024) toggleRightSidebar(false);
             });
 
             // Sidebar Toggle
             els.sidebarToggleBtn.addEventListener('click', () => {
-                state.sidebarOpen = !state.sidebarOpen;
-                if (state.sidebarOpen) {
-                    els.leftSidebar.classList.remove('-translate-x-full', '-ml-72');
-                    els.leftSidebar.classList.add('translate-x-0', 'ml-0');
-                    els.sidebarIcon.setAttribute('data-lucide', 'panel-left-close');
-                } else {
-                    els.leftSidebar.classList.add('-translate-x-full', '-ml-72');
-                    els.leftSidebar.classList.remove('translate-x-0', 'ml-0');
-                    els.sidebarIcon.setAttribute('data-lucide', 'panel-left-open');
-                }
-                lucide.createIcons();
+                toggleLeftSidebar(!state.sidebarOpen);
+            });
+
+            // Chat Toggle (Mobile)
+            els.chatToggleBtn.addEventListener('click', () => {
+                toggleRightSidebar(!state.chatOpen);
+            });
+
+            // Window Resize handling to reset sidebars seamlessly
+            window.addEventListener('resize', () => {
+                if (window.innerWidth >= 768 && !state.sidebarOpen) toggleLeftSidebar(true);
+                if (window.innerWidth >= 1024 && !state.chatOpen) toggleRightSidebar(true);
+                if (window.innerWidth >= 1024) els.mobileOverlay.classList.add('hidden');
             });
 
             // API Key Input
@@ -372,9 +407,41 @@
             els.btnActionSummarize.addEventListener('click', () => triggerQuickAction('summarize'));
             els.btnActionExplain.addEventListener('click', () => triggerQuickAction('explain_page'));
             els.btnActionQuiz.addEventListener('click', () => triggerQuickAction('quiz'));
+            els.btnActionGraph.addEventListener('click', () => triggerQuickAction('graph'));
         }
 
         // --- UI Updaters ---
+        function toggleLeftSidebar(forceState) {
+            state.sidebarOpen = forceState;
+            if (state.sidebarOpen) {
+                els.leftSidebar.classList.remove('-translate-x-full');
+                els.sidebarIcon.setAttribute('data-lucide', 'panel-left-close');
+                if (window.innerWidth < 768) {
+                    els.mobileOverlay.classList.remove('hidden');
+                    if (state.chatOpen) toggleRightSidebar(false);
+                }
+            } else {
+                els.leftSidebar.classList.add('-translate-x-full');
+                els.sidebarIcon.setAttribute('data-lucide', 'panel-left-open');
+                if (window.innerWidth < 1024 && !state.chatOpen) els.mobileOverlay.classList.add('hidden');
+            }
+            lucide.createIcons();
+        }
+
+        function toggleRightSidebar(forceState) {
+            state.chatOpen = forceState;
+            if (state.chatOpen) {
+                els.rightSidebar.classList.remove('translate-x-full');
+                if (window.innerWidth < 1024) {
+                    els.mobileOverlay.classList.remove('hidden');
+                    if (window.innerWidth < 768 && state.sidebarOpen) toggleLeftSidebar(false);
+                }
+            } else {
+                els.rightSidebar.classList.add('translate-x-full');
+                if (window.innerWidth < 768 && !state.sidebarOpen) els.mobileOverlay.classList.add('hidden');
+            }
+        }
+
         function updateThemeUI() {
             if (state.isDarkMode) {
                 els.html.classList.add('dark');
@@ -686,6 +753,9 @@
             const activeDoc = state.documents.find(d => d.id === state.activeDocId);
             if (!activeDoc || !state.apiKey || state.apiStatus === 'error' || state.isChatLoading) return;
 
+            // Open chat automatically on mobile if an action is triggered
+            if (window.innerWidth < 1024) toggleRightSidebar(true);
+
             let userQuery = "";
             let contextModifier = "";
 
@@ -701,6 +771,9 @@
                 }
             } else if (action === 'quiz') {
                 userQuery = "✨ Generate a 3-question multiple-choice quiz based on this document to test my understanding. Provide the answers at the very end.";
+            } else if (action === 'graph') {
+                userQuery = "✨ Generate a knowledge graph for this document.";
+                contextModifier = `\n\nYour task is to generate a Knowledge Graph representing the main entities and their relationships in this document. \nYou MUST output ONLY valid Mermaid.js graph syntax (e.g., \`graph TD\`). \nDo NOT include any markdown formatting, explanations, or text outside the code block. \nWrap the code in \`\`\`mermaid\n...\n\`\`\`.`;
             }
 
             state.chatMessages.push({ role: 'user', content: userQuery });
@@ -760,15 +833,27 @@
                 const wrapperClasses = isUser ? 'ml-auto items-end' : 'mr-auto items-start';
                 const bubbleClasses = isUser 
                     ? 'bg-black text-white dark:bg-white dark:text-black rounded-br-sm' 
-                    : 'bg-zinc-100 text-zinc-900 dark:bg-zinc-900 dark:text-zinc-100 rounded-bl-sm border border-zinc-200 dark:border-zinc-800';
+                    : 'bg-zinc-100 text-zinc-900 dark:bg-zinc-900 dark:text-zinc-100 rounded-bl-sm border border-zinc-200 dark:border-zinc-800 w-full overflow-hidden';
                 
-                // Simple markdown-like bold parsing
-                const formattedContent = msg.content.split('**').map((part, i) => i % 2 === 1 ? `<strong>${part}</strong>` : part).join('');
+                // Parse Mermaid blocks and apply simple markdown bolding
+                let formattedContent = msg.content;
+                const hasMermaid = formattedContent.includes('```mermaid');
+                
+                if (hasMermaid) {
+                    formattedContent = formattedContent.replace(/```mermaid\n?([\s\S]*?)```/g, (match, code) => {
+                        return `</p><div class="w-full overflow-x-auto bg-white dark:bg-zinc-800 p-4 rounded-xl border border-zinc-200 dark:border-zinc-700 my-2 shadow-sm"><div class="mermaid flex justify-center text-black dark:text-white">${code}</div></div><p class="mt-2">`;
+                    });
+                    formattedContent = `<p>${formattedContent}</p>`;
+                } else {
+                    formattedContent = formattedContent.replace(/\n/g, '<br/>');
+                }
+                
+                formattedContent = formattedContent.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
 
                 html += `
                     <div class="flex flex-col max-w-[90%] ${wrapperClasses}">
                         <div class="px-4 py-3 rounded-2xl text-sm leading-relaxed ${bubbleClasses}">
-                            ${formattedContent.replace(/\n/g, '<br/>')}
+                            ${formattedContent}
                         </div>
                         <span class="text-[10px] text-zinc-400 mt-1 px-1">
                             ${isUser ? 'You' : 'Gemini'}
@@ -779,6 +864,18 @@
 
             els.chatMessages.innerHTML = html;
             els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
+            
+            // Render Mermaid diagrams asynchronously if they exist in the updated DOM
+            if (window.mermaid) {
+                setTimeout(() => {
+                    try {
+                        mermaid.initialize({ theme: state.isDarkMode ? 'dark' : 'default' });
+                        mermaid.init(undefined, document.querySelectorAll('.mermaid'));
+                    } catch (e) {
+                        console.error('Mermaid render error', e);
+                    }
+                }, 100);
+            }
         }
 
     </script>
